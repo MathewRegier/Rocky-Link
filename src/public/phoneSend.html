@@ -1,0 +1,29 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Load Calls Interface</title>
+</head>
+<body>
+    <button id="loadCallsButton">Load Calls and Start Calling</button>
+    <script>
+        document.getElementById('loadCallsButton').addEventListener('click', function() {
+            const filePath = 'phoneNumbers.csv';  // Ensure this file exists in your server's accessible directory
+            fetch('/initiate-calls', {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({ filePath: filePath })
+            })
+            .then(response => response.json())
+            .then(data => console.log('Data:', data))
+            .catch(error => console.error('Error:', error));
+        });
+    </script>
+    <!-- Optionally, you could add elements to monitor the call process, display progress, etc. -->
+    <div id="status"></div>
+    <script src="/js/main.js"></script> <!-- Ensure this file has relevant code if needed -->
+</body>
+</html>

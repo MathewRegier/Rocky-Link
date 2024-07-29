@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Customer Dashboard</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link href="styles/combined.css" rel="stylesheet">
+</head>
+<body>
+  <div class="container mt-3">
+    <h1>Customer Dashboard</h1>
+    <img id="companyLogo" alt="Company Logo" class="mx-auto d-block" style="max-height: 100px;">
+    <div class="account-info">
+      <div>Name: <span id="accountName"></span></div>
+      <div>Email: <span id="accountEmail"></span></div>
+      <div>Phone: <span id="accountPhone"></span></div>
+      <div>Date of Birth: <span id="accountDob"></span></div>
+    </div>
+    
+    <!-- Points System Section -->
+    <div id="pointsSystemSection" class="row" style="display: none;">
+      <div id="pointsInfoCard" class="card">
+        <h2>Points</h2>
+        <div id="pointsInfo" class="value"></div>
+      </div>
+    </div>
+    
+    <!-- Leveling System Section -->
+    <div id="levelingSystemSection" class="row" style="display: none;">
+      <div id="levelInfoCard" class="card">
+        <h2>Level</h2>
+        <div id="levelInfo" class="value"></div>
+        <p id="remainingExpInfo"></p>
+      </div>
+    </div>
+    
+    <div class="row">
+      <div id="badgesCard" class="card">
+        <h2>Badges</h2>
+        <ul id="badgesList" class="list-group"></ul>
+      </div>
+      <div id="achievementsCard" class="card">
+        <h2>Achievements</h2>
+        <ul id="achievementsList" class="list-group"></ul>
+      </div>
+    </div>
+  </div>
+  <footer>
+    <div id="rewardsCard" class="card">
+      <h2>Available Rewards</h2>
+      <div id="rewardsList" class="rewards-grid"></div>
+    </div>
+  </footer>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const customerData = JSON.parse(localStorage.getItem('customerData'));
+      if (!customerData) {
+        alert('No customer data found.');
+        window.location.href = 'customer_login.html';
+        return;
+      }
+
+      document.getElementById('accountName').innerText = `${customerData.firstName} ${customerData.lastName}`;
+      document.getElementById('accountEmail').innerText = customerData.email;
+      document.getElementById('accountPhone').innerText = customerData.phoneNumber;
+      document.getElementById('accountDob').innerText = new Date(customerData.dateOfBirth).toLocaleDateString();
+
+      try {
+        const companyResponse = await fetch(`/company/details/${customerData.companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const company = await companyResponse.json();
+
+        if (company.systems.includes('Points System')) {
+          document.getElementById('pointsSystemSection').style.display = 'block';
+          document.getElementById('pointsInfo').innerText = customerData.points;
+        }
+
+        if (company.systems.includes('Leveling System')) {
+          document.getElementById('levelingSystemSection').style.display = 'block';
+          let currentExp = customerData.totalPointsEarned;
+          let currentLevel = 1;
+          let expToNextLevel = 0;
+
+          const levelingConfig = company.levelingConfig;
+
+          if (levelingConfig.auto) {
+            let amount = levelingConfig.initialAmount / 2;
+            while (currentExp >= amount) {
+              currentExp -= amount;
+              currentLevel++;
+              amount *= 2;
+            }
+            expToNextLevel = amount - currentExp;
+          } else {
+            for (const config of levelingConfig.manualConfig) {
+              if (currentExp >= config.amount) {
+                currentLevel = config.level;
+                currentExp -= config.amount;
+              } else {
+                expToNextLevel = config.amount - currentExp;
+                break;
+              }
+            }
+          }
+
+          document.getElementById('levelInfo').innerText = currentLevel;
+          document.getElementById('expBar').style.width = `${(currentExp / expToNextLevel) * 100}%`;
+          document.getElementById('expBarText').innerText = `EXP: ${currentExp}/${expToNextLevel}`;
+          document.getElementById('remainingExpInfo').innerText = `EXP to next level: ${expToNextLevel}`;
+        }
+
+        const badgesList = document.getElementById('badgesList');
+        customerData.badges.forEach(badge => {
+          const badgeItem = document.createElement('li');
+          badgeItem.className = 'list-group-item';
+          badgeItem.textContent = badge;
+          badgesList.appendChild(badgeItem);
+        });
+
+        const achievementsList = document.getElementById('achievementsList');
+        customerData.achievements.forEach(achievement => {
+          const achievementItem = document.createElement('li');
+          achievementItem.className = 'list-group-item';
+          achievementItem.textContent = achievement;
+          achievementsList.appendChild(achievementItem);
+        });
+
+        const rewardsResponse = await fetch(`/reward/company/${customerData.companyId}`);
+        const rewards = await rewardsResponse.json();
+        const rewardsList = document.getElementById('rewardsList');
+        rewardsList.innerHTML = '';
+
+        rewards.forEach(reward => {
+          const rewardItem = document.createElement('div');
+          rewardItem.className = 'reward-item';
+          rewardItem.innerHTML = `
+            <h5>${reward.name}</h5>
+            <p>${reward.description}</p>
+            <small>Points Required: ${reward.pointsRequired}</small>
+            <button class="btn btn-primary btn-sm mt-2" onclick="redeemReward('${reward._id}')">Redeem</button>
+          `;
+          rewardsList.appendChild(rewardItem);
+        });
+      } catch (error) {
+        console.error('Error:', error);
+        alert('Failed to load customer data.');
+      }
+    });
+
+    async function redeemReward(rewardId) {
+      const customerData = JSON.parse(localStorage.getItem('customerData'));
+
+      try {
+        const response = await fetch('/customer/redeem', {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify({ rewardId, phoneNumber: customerData.phoneNumber })
+        });
+
+        const data = await response.json();
+        if (response.ok) {
+          alert('Reward redeemed successfully');
+          document.getElementById('pointsInfo').innerText = data.customer.points;
+          localStorage.setItem('customerData', JSON.stringify(data.customer));
+        } else {
+          alert(data.message);
+        }
+      } catch (error) {
+        console.error('Error redeeming reward:', error);
+        alert('Failed to redeem reward.');
+      }
+    }
+  </script>
+</body>
+</html>

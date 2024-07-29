@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Rewards</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link href="styles/combined.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jwt-decode/build/jwt-decode.min.js"></script>
+  <script src="branding.js" defer></script>
+  <script src="common.js" defer></script>
+
+</head>
+<body>
+  <div class="container">
+    <h1>Manage Rewards</h1>
+    <img id="companyLogo" alt="Company Logo" class="mx-auto d-block" style="max-height: 100px;">
+    <div class="card">
+      <h2>Create Reward</h2>
+      <form id="rewardForm">
+        <div class="form-group">
+          <label for="rewardName">Reward Name</label>
+          <input type="text" class="form-control" id="rewardName" required>
+        </div>
+        <div class="form-group">
+          <label for="rewardDescription">Reward Description</label>
+          <input type="text" class="form-control" id="rewardDescription" required>
+        </div>
+        <div class="form-group">
+          <label for="pointsRequired">Points Required</label>
+          <input type="number" class="form-control" id="pointsRequired" required>
+        </div>
+        <button type="submit" class="btn btn-primary">Add Reward</button>
+      </form>
+    </div>
+    <div class="card">
+      <h2>Existing Rewards</h2>
+      <ul id="rewardsList" class="list-group"></ul>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const token = localStorage.getItem('token');
+      const decodedToken = jwt_decode(token);
+      const companyId = decodedToken.companyId;
+
+      const fetchRewards = async () => {
+        const response = await fetch(`/reward/company/${companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const rewards = await response.json();
+        const rewardsList = document.getElementById('rewardsList');
+        rewardsList.innerHTML = '';
+        rewards.forEach(reward => {
+          const rewardItem = document.createElement('li');
+          rewardItem.className = 'list-group-item';
+          rewardItem.innerHTML = `
+            <strong>${reward.name}</strong> - ${reward.description}
+            <span class="badge badge-primary badge-pill">${reward.pointsRequired} points</span>
+            <button class="btn btn-sm btn-danger float-right" onclick="deleteReward('${reward._id}')">Delete</button>
+            <button class="btn btn-sm btn-warning float-right mr-2" onclick="editReward('${reward._id}')">Edit</button>
+          `;
+          rewardsList.appendChild(rewardItem);
+        });
+      };
+
+      await fetchRewards();
+
+      document.getElementById('rewardForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const reward = {
+          name: document.getElementById('rewardName').value,
+          description: document.getElementById('rewardDescription').value,
+          pointsRequired: document.getElementById('pointsRequired').value
+        };
+        const response = await fetch(`/reward/create`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify(reward)
+        });
+        const result = await response.json();
+        alert('Reward created');
+        await fetchRewards();
+      });
+
+      window.deleteReward = async (rewardId) => {
+        const response = await fetch(`/reward/${rewardId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const result = await response.json();
+        alert(result.message);
+        await fetchRewards();
+      };
+
+      window.editReward = async (rewardId) => {
+        const reward = await (await fetch(`/reward/${rewardId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        })).json();
+        document.getElementById('rewardName').value = reward.name;
+        document.getElementById('rewardDescription').value = reward.description;
+        document.getElementById('pointsRequired').value = reward.pointsRequired;
+        document.getElementById('rewardForm').addEventListener('submit', async (event) => {
+          event.preventDefault();
+          const updatedReward = {
+            name: document.getElementById('rewardName').value,
+            description: document.getElementById('rewardDescription').value,
+            pointsRequired: document.getElementById('pointsRequired').value
+          };
+          const response = await fetch(`/reward/${rewardId}`, {
+            method: 'PUT',
+            headers: {
+              'Content-Type': 'application/json',
+              'Authorization': `Bearer ${token}`
+            },
+            body: JSON.stringify(updatedReward)
+          });
+          const result = await response.json();
+          alert('Reward updated');
+          await fetchRewards();
+        }, { once: true });
+      };
+    });
+  </script>
+</body>
+</html>

@@ -1,0 +1,126 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Leveling Configuration</title>
+  <link href="https://maxcdn.bootstrapcdn.com/bootstrap/4.5.2/css/bootstrap.min.css" rel="stylesheet">
+  <link href="styles/combined.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/jwt-decode/build/jwt-decode.min.js"></script>
+  <script src="branding.js" defer></script>
+  <script src="common.js" defer></script>
+
+</head>
+<body>
+  <div class="container">
+    <h1>Leveling Configuration</h1>
+    <img id="companyLogo" alt="Company Logo" class="mx-auto d-block" style="max-height: 100px;">
+    <div class="card">
+      <h2>Leveling Configuration</h2>
+      <form id="levelingConfigForm">
+        <div class="form-group">
+          <label for="levelingType">Leveling Type</label>
+          <select class="form-control" id="levelingType" required>
+            <option value="auto">Automatic</option>
+            <option value="manual">Manual</option>
+          </select>
+        </div>
+        <div id="autoConfig" class="form-group">
+          <label for="initialAmount">Initial Amount ($)</label>
+          <input type="number" class="form-control" id="initialAmount" required>
+        </div>
+        <div id="manualConfig" class="form-group" style="display: none;">
+          <label for="maxLevel">Max Level</label>
+          <input type="number" class="form-control" id="maxLevel" required>
+          <div id="manualLevels"></div>
+        </div>
+        <button type="submit" class="btn btn-primary">Update</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    document.addEventListener('DOMContentLoaded', async () => {
+      const token = localStorage.getItem('token');
+      const decodedToken = jwt_decode(token);
+      const companyId = decodedToken.companyId;
+
+      const fetchConfig = async () => {
+        const response = await fetch(`/company/leveling-config/${companyId}`, {
+          headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const config = await response.json();
+        document.getElementById('levelingType').value = config.auto ? 'auto' : 'manual';
+        document.getElementById('initialAmount').value = config.initialAmount;
+        if (config.auto) {
+          document.getElementById('autoConfig').style.display = 'block';
+          document.getElementById('manualConfig').style.display = 'none';
+        } else {
+          document.getElementById('autoConfig').style.display = 'none';
+          document.getElementById('manualConfig').style.display = 'block';
+          document.getElementById('maxLevel').value = config.manualConfig.length;
+          const manualLevels = document.getElementById('manualLevels');
+          manualLevels.innerHTML = '';
+          config.manualConfig.forEach((levelConfig, index) => {
+            const levelDiv = document.createElement('div');
+            levelDiv.className = 'form-group';
+            levelDiv.innerHTML = `
+              <label for="levelAmount${index + 1}">Amount for Level ${index + 1} ($)</label>
+              <input type="number" class="form-control" id="levelAmount${index + 1}" name="levelAmount${index + 1}" value="${levelConfig.amount}" required>
+            `;
+            manualLevels.appendChild(levelDiv);
+          });
+        }
+      };
+
+      await fetchConfig();
+
+      document.getElementById('levelingType').addEventListener('change', (event) => {
+        if (event.target.value === 'auto') {
+          document.getElementById('autoConfig').style.display = 'block';
+          document.getElementById('manualConfig').style.display = 'none';
+        } else {
+          document.getElementById('autoConfig').style.display = 'none';
+          document.getElementById('manualConfig').style.display = 'block';
+        }
+      });
+
+      document.getElementById('maxLevel').addEventListener('input', (event) => {
+        const maxLevel = parseInt(event.target.value);
+        const manualLevels = document.getElementById('manualLevels');
+        manualLevels.innerHTML = '';
+        for (let i = 1; i <= maxLevel; i++) {
+          const levelDiv = document.createElement('div');
+          levelDiv.className = 'form-group';
+          levelDiv.innerHTML = `
+            <label for="levelAmount${i}">Amount for Level ${i} ($)</label>
+            <input type="number" class="form-control" id="levelAmount${i}" name="levelAmount${i}" required>
+          `;
+          manualLevels.appendChild(levelDiv);
+        }
+      });
+
+      document.getElementById('levelingConfigForm').addEventListener('submit', async (event) => {
+        event.preventDefault();
+        const levelingType = document.getElementById('levelingType').value;
+        const levelingConfig = {
+          auto: levelingType === 'auto',
+          initialAmount: levelingType === 'auto' ? document.getElementById('initialAmount').value : undefined,
+          manualConfig: levelingType === 'manual' ? Array.from(document.querySelectorAll('#manualLevels .form-control')).map((input, index) => ({ level: index + 1, amount: input.value })) : undefined
+        };
+        const response = await fetch(`/company/leveling-config`, {
+          method: 'PUT',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({ levelingConfig })
+        });
+        const result = await response.json();
+        alert('Leveling configuration updated');
+        await fetchConfig();
+      });
+    });
+  </script>
+</body>
+</html>
